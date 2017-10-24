@@ -79,7 +79,7 @@ char *trim(char *s) {
 		"leave    \n" // Exit function.
 		"ret"
 	);
-	return NULL;     // Never reach here.
+	return NULL;     // Never reach here, but required otherwise GCC squawks of no return value.
 #endif
 }
 
