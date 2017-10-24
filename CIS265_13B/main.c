@@ -32,7 +32,7 @@
 * Change Log:
 *   09/10/2017: Initial release. JME
 *   10/19/2017: Added inline assembly code to trim function. JME
-*   10/20/2017: Added commandline retreval of text file name. JME
+*   10/20/2017: Added commadline retreval of text file name. JME
 *************************************************************************/
 #include <assert.h>
 #include <stdio.h>
@@ -43,45 +43,51 @@
 #ifdef _MSC_VER
 // C/C++ Preprocessor Definitions: _CRT_SECURE_NO_WARNINGS
 #pragma warning(disable:4996)
-#endif
 
-// Trim all but digits from string.
 char *trim(char *s) {
 	char *d;
 
 	// Save start of string for function return and set d=s.
-#ifdef _MSC_VER
 	__asm {
 		mov eax, s // Get address of string.
 		mov d, eax // d = s.
 		push eax   // Save start of string for function return.
 	}
-#elif __GNUC__
-	asm volatile (
-		"mov %1, %0 \n" // Set d = s.
-		"push %1"       // Save start of string for function return.
-		: "=r" (d) : "r" (s)
-		);
-#endif
-
 	while (*s != '\0') {
 		if (isdigit(*s))
 			*d++ = *s;
 		s++;
 	}
 	*d = '\0'; // Terminate string.
-
-#ifdef _MSC_VER
 	__asm { pop eax } // Set beginning of string as return value.
+}
 #elif __GNUC__
+
+void _trim(char *s) {
+	char *d;
+
+	// Save start of string for function return and set d=s.
+	asm volatile (
+		"mov %1, %0 \n" // Set d = s.
+		"push %1"       // Save start of string for function return.
+		: "=r" (d) : "r" (s)
+	);
+	while (*s != '\0') {
+		if (isdigit(*s))
+			*d++ = *s;
+		s++;
+	}
+	*d = '\0'; // Terminate string.
 	asm volatile (
 		"pop %eax \n" // Retrieve beginning of string.
 		"leave    \n" // Exit function.
 		"ret"
 	);
-	return NULL;     // Never reach here, but required otherwise GCC squawks of no return value.
-#endif
 }
+
+// Define weak alias to prevent gcc from squawking no return value.
+char *trim(char *) __attribute__((weak, alias("_trim")));
+#endif
 
 // Program starts here.
 int main(int argc, char *argv[]) {
@@ -93,9 +99,9 @@ int main(int argc, char *argv[]) {
 	setvbuf(stdout, NULL, _IONBF, 0);
 	fflush(stdout);
 
-	// Check command line arguments 
+	// Check command line arguments
 	if (argc == 2) {
-		// Open the commandline file name. 
+		// Open the commandline file name.
 		strcpy(fileName, argv[1]);
 	}
 
