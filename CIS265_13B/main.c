@@ -74,7 +74,7 @@ char *trim(char *s) {
 #ifdef _MSC_VER
 	__asm { pop eax } // Set beginning of string as return value.
 #elif __GNUC__
-	asm(
+	asm volatile (
 		"pop %eax \n" // Retrieve beginning of string.
 		"leave    \n" // Exit function.
 		"ret"
