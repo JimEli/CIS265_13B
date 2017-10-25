@@ -82,7 +82,7 @@ void _trim(char *s) {
 	asm volatile ( "pop %eax" ); // Retrieve beginning of string.
 }
 
-// Define weak alias to prevent gcc from squawking no return value.
+// Define weak alias to prevent gcc from squawking about no return value.
 char *trim(char *) __attribute__ ((weak, alias ("_trim")));
 #endif
 
