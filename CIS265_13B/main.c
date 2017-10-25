@@ -61,6 +61,7 @@ char *trim(char *s) {
 	*d = '\0'; // Terminate string.
 	__asm { pop eax } // Set beginning of string as return value.
 }
+
 #elif __GNUC__
 
 void _trim(char *s) {
@@ -78,15 +79,11 @@ void _trim(char *s) {
 		s++;
 	}
 	*d = '\0'; // Terminate string.
-	asm volatile (
-		"pop %eax \n" // Retrieve beginning of string.
-		"leave    \n" // Exit function.
-		"ret"
-	);
+	asm volatile ( "pop %eax" ); // Retrieve beginning of string.
 }
 
 // Define weak alias to prevent gcc from squawking no return value.
-char *trim(char *) __attribute__((weak, alias("_trim")));
+char *trim(char *) __attribute__ ((weak, alias ("_trim")));
 #endif
 
 // Program starts here.
@@ -117,4 +114,3 @@ int main(int argc, char *argv[]) {
 		fclose(stream);
 	}
 }
-
