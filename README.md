@@ -17,3 +17,8 @@ The output of the program should have the following appearance:
   (617) 343-4200
 ```
 Have the program obtain the file name from the command line.
+
+Notes:
+1. Compiled with MS Visual Studio 2017 Community (v141), using C language options.
+
+*Submitted in partial fulfillment of the requirements of PCC CIS-265.*
