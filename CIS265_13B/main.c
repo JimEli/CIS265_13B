@@ -26,6 +26,9 @@
 * Notes:
 *  (1) Compiled with MS Visual Studio 2017 Community (v141), using C
 *      language options.
+*  (2) Conditional compilation information from here:
+*      http://nadeausoftware.com/articles/2012/02/
+*      c_c_tip_how_detect_processor_type_using_compiler_predefined_macros
 *
 * Submitted in partial fulfillment of the requirements of PCC CIS-265.
 *************************************************************************
@@ -33,6 +36,7 @@
 *   09/10/2017: Initial release. JME
 *   10/19/2017: Added inline assembly code to trim function. JME
 *   10/20/2017: Added commadline retreval of text file name. JME
+*   11/19/2017: Correct conditional compile macros. JME
 *************************************************************************/
 #include <assert.h>
 #include <stdio.h>
@@ -43,26 +47,45 @@
 #ifdef _MSC_VER
 // C/C++ Preprocessor Definitions: _CRT_SECURE_NO_WARNINGS
 #pragma warning(disable:4996)
+#endif
 
+// Three separate versions of same function differ due to x86 inline assembly syntax.
+#if defined (_MSC_VER) && (defined(__i386) || defined(_M_IX86))
 char *trim(char *s) {
-	char *d;
-
-	// Save start of string for function return and set d=s.
 	__asm {
-		mov eax, s // Get address of string.
-		mov d, eax // d = s.
-		push eax   // Save start of string for function return.
+		push  ebx       // Preserve register.
+		mov   eax, s    // eax = source.
+		mov   ebx, eax  // ebx = destination.
+		push  eax       // Save start of string for function return.
+
+		start :
+		movsx ecx, byte ptr[eax]
+			test  ecx, ecx  // End of source?
+			je    exitTrim
+			// Source character a digit?
+			movsx ecx, byte ptr[eax]
+			cmp   ecx, 0x30 // '0'
+			jl    notDigit
+			movsx ecx, byte ptr[eax]
+			cmp   ecx, 0x39 // '9'
+			jg    notDigit
+			// Copy source digit to destination.
+			mov   dl, byte ptr[eax]
+			mov   byte ptr[ebx], dl
+			add   ebx, 1    // Increment destination pointer.
+
+			notDigit:           // Not a digit, skip character.
+		add   eax, 1    // Increment source pointer.
+			jmp   start
+
+			exitTrim :
+		mov   byte ptr[ebx], 0 // add trailing zero.
+			pop   eax       // Return start of string.
+			pop   ebx       // Reset register.
 	}
-	while (*s != '\0') {
-		if (isdigit(*s))
-			*d++ = *s;
-		s++;
-	}
-	*d = '\0'; // Terminate string.
-	__asm { pop eax } // Set beginning of string as return value.
 }
 
-#elif __GNUC__
+#elif __GNUC__ && defined(_X86_)
 
 void _trim(char *s) {
 	char *d;
@@ -72,18 +95,33 @@ void _trim(char *s) {
 		"mov %1, %0 \n" // Set d = s.
 		"push %1"       // Save start of string for function return.
 		: "=r" (d) : "r" (s)
-	);
+		);
 	while (*s != '\0') {
 		if (isdigit(*s))
 			*d++ = *s;
 		s++;
 	}
 	*d = '\0'; // Terminate string.
-	asm volatile ( "pop %eax" ); // Retrieve beginning of string.
+	asm("pop %eax"); // Retrieve beginning of string.
 }
 
 // Define weak alias to prevent gcc from squawking about no return value.
-char *trim(char *) __attribute__ ((weak, alias ("_trim")));
+char *trim(char *) __attribute__((weak, alias("_trim")));
+
+#else
+// Default version of trim().
+char *trim(char *s) {
+	char *d = s, *_s = s;
+
+	while (*s != '\0') {
+		if (isdigit(*s))
+			*d++ = *s;
+		s++;
+	}
+	*d = '\0'; // Terminate string.
+	return _s;
+}
+
 #endif
 
 // Program starts here.
@@ -97,10 +135,9 @@ int main(int argc, char *argv[]) {
 	fflush(stdout);
 
 	// Check command line arguments
-	if (argc == 2) {
+	if (argc == 2)
 		// Open the commandline file name.
 		strcpy(fileName, argv[1]);
-	}
 
 	// Attempt to open default filename.
 	if ((stream = fopen(fileName, "r")) == NULL)
