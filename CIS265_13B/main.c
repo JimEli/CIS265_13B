@@ -51,6 +51,7 @@
 
 // Three separate versions of same function differ due to x86 inline assembly syntax.
 #if defined (_MSC_VER) && (defined(__i386) || defined(_M_IX86))
+
 char *trim(char *s) {
 	__asm {
 		push  ebx       // Preserve register.
@@ -58,57 +59,105 @@ char *trim(char *s) {
 		mov   ebx, eax  // ebx = destination.
 		push  eax       // Save start of string for function return.
 
-		start :
-		movsx ecx, byte ptr[eax]
-			test  ecx, ecx  // End of source?
-			je    exitTrim
-			// Source character a digit?
-			movsx ecx, byte ptr[eax]
-			cmp   ecx, 0x30 // '0'
-			jl    notDigit
-			movsx ecx, byte ptr[eax]
-			cmp   ecx, 0x39 // '9'
-			jg    notDigit
-			// Copy source digit to destination.
-			mov   dl, byte ptr[eax]
-			mov   byte ptr[ebx], dl
-			add   ebx, 1    // Increment destination pointer.
+	start_:
+		movzx cl, byte ptr[eax]
+		test  ecx, ecx  // End of source?
+		je    exit_
+		// Source character a digit?
+		cmp   ecx, 0x30 // '0'
+		jl    notDigit_
+		cmp   ecx, 0x39 // '9'
+		jg    notDigit_
+		// Copy source digit to destination.
+		mov   byte ptr[ebx], cl
+		add   ebx, 1    // Increment destination pointer.
 
-			notDigit:           // Not a digit, skip character.
+	notDigit_: 
 		add   eax, 1    // Increment source pointer.
-			jmp   start
+		jmp   start_
 
-			exitTrim :
+	exit_:
 		mov   byte ptr[ebx], 0 // add trailing zero.
-			pop   eax       // Return start of string.
-			pop   ebx       // Reset register.
+		pop   eax       // Return start of string.
+		pop   ebx       // Reset register.
 	}
 }
 
 #elif __GNUC__ && defined(_X86_)
+/*
+__asm__ (
+	"_trim:                 \n"
+		"push %ebp          \n" // Set up stack frame.
+		"mov  %esp, %ebp    \n"
+
+		"mov  8(%ebp), %eax \n" // eax = source.
+		"mov  %eax, %ebx    \n" // ebx = destination.
+		"push %eax          \n" // save for return.
+
+	"loop:                  \n"
+		"movzx (%eax), %ecx \n" // get source character.
+		"test %ecx, %ecx    \n" // test for NULL terminator.
+		"je   exit          \n" // end found.
+
+		"cmp  $'0', %ecx    \n" // >= '0'
+		"jl   notDigit      \n"
+		"cmp  $'9', %ecx    \n" // <= '9'
+		"jg   notDigit      \n"
+
+		"movb  %cl, (%ebx)  \n"
+		"add  $1, %ebx       \n" // increment destination pointer.
+
+	"notDigit:              \n"
+		"add  $1, %eax       \n" // increment source pointer.
+		"jmp  loop          \n"
+
+	"exit:                  \n"
+		"movb $0, (%ebx)  \n"
+
+		"pop  %eax          \n" // return start of string.
+		"pop  %ebp          \n" // clean up and return.
+		"ret                \n"
+);
+
+char *trim();
+*/
 
 void _trim(char *s) {
-	char *d;
+	char *d = NULL;
 
-	// Save start of string for function return and set d=s.
-	asm volatile (
-		"mov %1, %0 \n" // Set d = s.
-		"push %1"       // Save start of string for function return.
-		: "=r" (d) : "r" (s)
-		);
-	while (*s != '\0') {
-		if (isdigit(*s))
-			*d++ = *s;
-		s++;
-	}
-	*d = '\0'; // Terminate string.
-	asm("pop %eax"); // Retrieve beginning of string.
+	__asm__ __volatile__ (
+			"movl  %1, %0         \n" // Set destination == source.
+			"push  %1             \n" // Save start of string for return.
+
+		"loop:                    \n"
+			"movzx (%1), %%ecx    \n" // Get next source character.
+			"test  %%ecx, %%ecx   \n" // Test for string end.
+			"je    exit           \n"
+
+			"cmp   $'0', %%ecx    \n" // >= '0'
+			"jl    notDigit       \n"
+			"cmp   $'9', %%ecx    \n" // <= '9'
+			"jg    notDigit       \n"
+
+			"movb  %%cl, (%0)     \n" // Save character to destination.
+			"add   $1, %0         \n" // Increment destination pointer.
+
+		"notDigit:                \n"
+			"add   $1, %1         \n" // Increment source pointer.
+			"jmp   loop           \n"
+
+		"exit:                    \n"
+			"movb  $0, (%0)       \n" // Terminate destination string.
+			"pop   %%eax          \n" // Return start of string.
+			:  : "r" (d), "r" (s) : "memory"
+	);
 }
 
 // Define weak alias to prevent gcc from squawking about no return value.
 char *trim(char *) __attribute__((weak, alias("_trim")));
 
 #else
+
 // Default version of trim().
 char *trim(char *s) {
 	char *d = s, *_s = s;
